@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html>
+  
+<head>
+  <script src="https://npmcdn.com/react@15.3.0/dist/react.js"></script>
+  <script src="https://npmcdn.com/react-dom@15.3.0/dist/react-dom.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-core/5.8.23/browser.min.js"></script>
+  <script src="https://npmcdn.com/react-router/umd/ReactRouter.min.js"></script>
+  <script src="https://unpkg.com/jquery@3.1.0/dist/jquery.min.js"></script>
+  
+  <style>
+
+  body {
+  background-color: #FFCC00;
+  padding: 20px;
+  margin-top: 200px;
+  width: 25% ;
+  margin-left: 500px;
+}
+h1, h2, p, ul, li {
+  font-family: Helvetica, Arial, sans-serif;
+}
+ul.header li {
+  display: inline;
+  list-style-type: none;
+  margin: 0;
+}
+ul.header {
+  background-color: #111;
+  padding: 0;
+}
+ul.header li a {
+  color: #FFF;
+  font-weight: bold;
+  text-decoration: none;
+  padding: 20px;
+  display: inline-block;
+}
+#content {
+  background-color: #FFF;
+  padding: 10px;
+  white-space: pre-line;
+  word-wrap: break-word;
+  width: 450px;
+ 
+}
+#content h2 {
+  padding: 10px;
+  margin: 0;
+
+}
+#content li {
+  margin-bottom: 10px;
+}
+
+
+  </style>
+
+</head>
+  
+<body>
+  
+  <div id="content" >
+  
+  </div>
+ 
+
+  <script type="text/babel">
+
+  var ReadBox = React.createClass({
+
+  /* This code fetches the username from the given URL*/
+  fetchValueURL: function(variable){
+   var query = window.location.search.substring(1);
+   var vars = query.split("?");
+  for (var i=0;i < vars.length;i++) {
+    var pair = vars[i].split("=");
+    if (pair[0] == variable) {
+     console.log('here inside URL')
+       return pair[1] ;
+    }
+  } 
+},
+ /*saves the initial states of variable for use within logic code*/
+  getInitialState: function() {
+  
+    return {data: [$.ajax({
+      url: this.props.url,
+      dataType: 'json',
+      cache: false,
+      success: function(data) {
+        this.setState({data: data});
+      }.bind(this),
+      error: function(xhr, status, err) {
+        console.error(this.props.url, status, err.toString());
+      }.bind(this)
+    })
+],
+curPassage: -1,
+curWordToShow:-1,
+time:[],
+name:"",
+sendBack:[],
+sent:"False"
+    };
+     
+  },
+ postData:function(sendBack){
+ console.log(sendBack)
+ /*This code is to handle the CSRF token to prevent cross site scripting*/
+  $.ajaxSetup({
+      beforeSend: function(xhr, settings) {
+          if (settings.type == 'POST' || settings.type == 'PUT' || settings.type == 'DELETE') {
+              function getCookie(name) {
+                  var cookieValue = null;
+                  if (document.cookie && document.cookie != '') {
+                      var cookies = document.cookie.split(';');
+                      for (var i = 0; i < cookies.length; i++) {
+                          var cookie = jQuery.trim(cookies[i]);
+                          // Does this cookie string begin with the name we want?
+                          if (cookie.substring(0, name.length + 1) == (name + '=')) {
+                              cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                              break;
+                          }
+                      }
+                  }
+                  return cookieValue;
+              }
+              if (!(/^http:.*/.test(settings.url) || /^https:.*/.test(settings.url))) {
+                  // Only send the token to relative URLs i.e. locally.
+                  xhr.setRequestHeader("X-CSRFToken", getCookie('csrftoken'));
+              }
+          }
+      }
+  });
+ /*sends the data captured back to django rest framework*/ 
+ $.ajax({
+      url: '/api/subjects/',
+      dataType: 'json',
+      type: 'POST',
+      data: sendBack,
+      success: function(data) {
+        this.setState({data: data});
+      }.bind(this),
+      error: function(xhr, status, err) {
+        console.error('/api/subjects/', status, err.toString());
+      }.bind(this)
+    });
+
+ },
+ /* Summary: Action on Enter key press is handled here 
+ Most of logic is handled by this component */
+ handleKeyPress: function(event){
+        if (this.state.curPassage >= this.state.data.length){
+
+            if (this.state.sent=="False"){
+              var sendData = JSON.stringify(this.state.sendBack)
+              {this.postData(sendData)}
+              this.setState({sent: "True"});
+              }
+              return;
+        }
+        if(event.keyCode === 13){ 
+
+
+             var curWordIndex = this.state.curWordToShow;
+             var curPassageIndex = this.state.curPassage;
+
+             if (curPassageIndex < 0){
+                 curWordIndex = -1
+                 curPassageIndex = 0
+             }
+             else {
+                curWordIndex = curWordIndex+1;
+                var startTime = (new Date()).getTime();
+
+                this.state.time.push(startTime);
+                
+                if(curWordIndex >= this.state.data[curPassageIndex].words){
+                    for(var t=0; t < (this.state.time.length)-1;t++){
+                        this.state.time[t] = (this.state.time[t+1]-this.state.time[t])/1000
+                     }
+                    this.state.time.splice(-1,1)
+                    this.setState({name:this.fetchValueURL("fname")});
+                    this.state.sendBack.push({subject_name:this.state.name,
+                                  time_per_word:this.state.time.join(', '), 
+                                  passage_read: this.state.data[curPassageIndex].id})                    
+                    curWordIndex = -1
+                    curPassageIndex = curPassageIndex + 1
+                    this.setState({time:[]})
+                }
+            }
+             this.setState({
+                    curWordToShow : curWordIndex,
+                    curPassage : curPassageIndex
+
+                    
+             })
+         }            
+     
+  },
+
+ componentDidMount: function() {
+    window.addEventListener('keypress', this.handleKeyPress);
+  },
+
+  componentWillUnmount: function() {
+    window.removeEventListener('keypress', this.handleKeyPress);
+  },
+
+ /*Summary: This function renders what has to be displayed 
+   Conditions: Where user completed
+   OR user has not started
+   OR user is in between the reading
+   Passes: The entire wordlist with which word to be shown at the moment.
+ */
+
+  render: function() {
+     if (this.state.curPassage >= this.state.data.length){
+         return (
+          <div className="ReadBox">
+            <h1>Completed!!!</h1>          
+          </div>
+        );
+      
+     }
+     else if(this.state.curPassage < 0 ){
+         
+       return (
+          <div className="ReadBox">
+            <h1>Read</h1>            
+          </div>
+        );
+     }
+     else{
+        var wordList = this.state.data[this.state.curPassage].passage.split(" ");
+       return (
+          <div className="ReadBox">
+            <h1>Read</h1>
+            <h2>
+            <Passage words={wordList} curWordToShow={this.state.curWordToShow} />
+            </h2>
+          </div>
+        );
+     }
+  }
+});
+
+/* Summary: Passage component handles which word is to be currently displayed
+   Condition: If word same as the current index - show the word
+   If word is punctuation - show the punctuation
+   Otherwise for all other words - shows as underscore
+*/
+
+var Passage = React.createClass({
+  render: function() {   
+   var self = this;
+   var wordNodes = self.props.words.map(function(word, index){
+   var isUnderscore;
+   if (self.props.curWordToShow == index){
+      isUnderscore = false;
+   }
+   else if((33<=word.charCodeAt(0) ) && (word.charCodeAt(0) <= 47)) {
+      isUnderscore = false;
+   }
+   else{
+      isUnderscore = true;
+   }
+     return (
+        <Word text={word} underscore={isUnderscore}>
+          {word}
+        </Word>
+     );
+     });
+     return(
+      <span>
+      {wordNodes}
+      </span>
+
+     );
+
+    }
+});
+/*Summary: Word component returns the text as word or underscore */
+var Word = React.createClass({
+
+  render:function(){
+  var isUnderscore = this.props.underscore;
+  var underscoreText = '_'.repeat(this.props.text.length)
+  if(isUnderscore){
+  return(   
+      <span>
+      {underscoreText}&nbsp;&nbsp;
+      </span>
+    );
+    }
+    else{
+    return(
+    <span>
+      {this.props.text}&nbsp;&nbsp;
+      </span>
+    
+      );
+    }
+  }
+});
+
+ReactDOM.render(
+  <ReadBox url="/api/passages"/>,
+  document.getElementById('content')
+
+);
+  </script>
+</body>
+  
+</html>
